@@ -1,3 +1,10 @@
+當然！我幫你把之前用 `document.write()` 動態產生 `<option>` 的部分改成用 DOM API，且包在 `DOMContentLoaded` 事件裡，符合 CSP 不使用 `eval` 也不會觸發限制。
+
+---
+
+# 修正後完整 HTML 範例
+
+```html
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -27,22 +34,12 @@
     <label>糙米（每公斤 $150）數量：
       <select id="brownRice" name="brownRice">
         <option value="0">0</option>
-        <script>
-          for (let i = 1; i <= 20; i++) {
-            document.write(`<option value="${i}">${i}</option>`);
-          }
-        </script>
       </select>
     </label>
 
     <label>白米（每公斤 $150）數量：
       <select id="whiteRice" name="whiteRice">
         <option value="0">0</option>
-        <script>
-          for (let i = 1; i <= 20; i++) {
-            document.write(`<option value="${i}">${i}</option>`);
-          }
-        </script>
       </select>
     </label>
 
@@ -54,55 +51,77 @@
   </form>
 
   <script>
-    const brownSelect = document.getElementById('brownRice');
-    const whiteSelect = document.getElementById('whiteRice');
-    const totalAmount = document.getElementById('totalAmount');
-    const form = document.getElementById('orderForm');
+    document.addEventListener("DOMContentLoaded", () => {
+      const brownSelect = document.getElementById('brownRice');
+      const whiteSelect = document.getElementById('whiteRice');
+      const totalAmount = document.getElementById('totalAmount');
+      const form = document.getElementById('orderForm');
 
-    function calculateTotal() {
-      const brownQty = parseInt(brownSelect.value) || 0;
-      const whiteQty = parseInt(whiteSelect.value) || 0;
-      const totalKg = brownQty + whiteQty;
-      const ricePrice = 150;
-      const shipping = totalKg >= 10 ? 0 : 150;
-      const total = (totalKg * ricePrice) + shipping;
-      totalAmount.textContent = total;
-      return total;
-    }
+      // 動態產生 1~20 的選項
+      function populateOptions(selectElement) {
+        for (let i = 1; i <= 20; i++) {
+          const option = document.createElement('option');
+          option.value = i;
+          option.textContent = i;
+          selectElement.appendChild(option);
+        }
+      }
+      populateOptions(brownSelect);
+      populateOptions(whiteSelect);
 
-    brownSelect.addEventListener("change", calculateTotal);
-    whiteSelect.addEventListener("change", calculateTotal);
-    calculateTotal();
+      function calculateTotal() {
+        const brownQty = parseInt(brownSelect.value) || 0;
+        const whiteQty = parseInt(whiteSelect.value) || 0;
+        const totalKg = brownQty + whiteQty;
+        const ricePrice = 150;
+        const shipping = totalKg >= 10 ? 0 : 150;
+        const total = (totalKg * ricePrice) + shipping;
+        totalAmount.textContent = total;
+        return total;
+      }
 
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
+      brownSelect.addEventListener("change", calculateTotal);
+      whiteSelect.addEventListener("change", calculateTotal);
+      calculateTotal();
 
-      const data = {
-        name: form.name.value,
-        phone: form.phone.value,
-        email: form.email.value,
-        brownRice: Number(brownSelect.value),
-        whiteRice: Number(whiteSelect.value),
-        total: calculateTotal()
-      };
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
 
-      fetch("https://floral-sun-acc2.roger-c16.workers.dev", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(data)
-      })
-      .then(res => res.text())
-      .then(response => {
-        alert("✅ 訂單已送出，謝謝您的訂購！");
-        form.reset();
-        calculateTotal();
-      })
-      .catch(error => {
-        alert("❌ 送出失敗，請稍後再試。\n" + error);
+        const data = {
+          name: form.name.value,
+          phone: form.phone.value,
+          email: form.email.value,
+          brownRice: Number(brownSelect.value),
+          whiteRice: Number(whiteSelect.value),
+          total: calculateTotal()
+        };
+
+        fetch("https://floral-sun-acc2.roger-c16.workers.dev", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(data)
+        })
+        .then(res => res.text())
+        .then(response => {
+          alert("✅ 訂單已送出，謝謝您的訂購！");
+          form.reset();
+          calculateTotal();
+        })
+        .catch(error => {
+          alert("❌ 送出失敗，請稍後再試。\n" + error);
+        });
       });
     });
   </script>
 </body>
 </html>
+```
+
+---
+
+這樣改完就符合 CSP，不會觸發禁止 `eval` 或 `document.write` 的錯誤。
+你直接用這版放上網頁就能正常執行囉！
+
+如果要，我還能幫你檢查 Cloudflare Worker 跟 Google Apps Script 部分，確保整套系統無縫連接。
