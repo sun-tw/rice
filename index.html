@@ -91,10 +91,7 @@ fetch("https://rice-order-proxy.roger-c16.workers.dev", {
   body: JSON.stringify(data)
 })
 
-fetch("https://rice-order-proxy.你的子網域.workers.dev", {
-        method: "POST",
-        body: JSON.stringify(data)
-      })
+
         .then(res => res.text())
         .then(response => {
           alert("✅ 訂單已送出，謝謝您的訂購！");
