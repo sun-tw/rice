@@ -1,116 +1,331 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <title>米訂購表單 (CSP 友善版)</title>
-  <style>
-    body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
-    label { display: block; margin-top: 12px; }
-    input, select { width: 100%; padding: 8px; margin-top: 4px; }
-    .total { font-size: 1.2em; font-weight: bold; margin-top: 20px; }
-    button { margin-top: 20px; padding: 10px 20px; font-size: 1em; }
-  </style>
-</head>
-<body>
-  <h2>米訂購表單</h2>
-  <form id="orderForm" novalidate>
-    <label>姓名：
-      <input type="text" name="name" required />
-    </label>
-    <label>聯絡電話：
-      <input type="text" name="phone" required />
-    </label>
-    <label>Email：
-      <input type="email" name="email" required />
-    </label>
-
-    <label>糙米（每公斤 $150）數量：
-      <select id="brownRice" name="brownRice">
-        <option value="0">0</option>
-      </select>
-    </label>
-
-    <label>白米（每公斤 $150）數量：
-      <select id="whiteRice" name="whiteRice">
-        <option value="0">0</option>
-      </select>
-    </label>
-
-    <p>※ 運費說明：每筆訂單預設運費 $150。若總數量達 10 公斤（可混搭白米與糙米）則免運。</p>
-
-    <div class="total">總金額：<span id="totalAmount">0</span> 元</div>
-
-    <button type="submit">送出訂單</button>
-  </form>
-
-  <script>
-    // 等 DOM 內容載入完成再執行
-    document.addEventListener("DOMContentLoaded", function() {
-      const brownSelect = document.getElementById('brownRice');
-      const whiteSelect = document.getElementById('whiteRice');
-      const totalAmount = document.getElementById('totalAmount');
-      const form = document.getElementById('orderForm');
-
-      // 用純 DOM API 動態產生選項（1~20）
-      function populateOptions(selectElement) {
-        for (let i = 1; i <= 20; i++) {
-          const option = document.createElement('option');
-          option.value = i;
-          option.textContent = i;
-          selectElement.appendChild(option);
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>米產品團購訂單</title>
+    <!-- 引入 Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'], // 使用 Inter 字體
+                    },
+                }
+            }
         }
-      }
-      populateOptions(brownSelect);
-      populateOptions(whiteSelect);
+    </script>
+    <!-- 引入 Supabase JavaScript 客戶端函式庫 (用於 LLM 呼叫，雖然數據庫改為Google Sheet) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.43.0/dist/umd/supabase.min.js"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4 font-sans">
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md border border-gray-200">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">米產品團購訂單</h1>
 
-      // 計算總價
-      function calculateTotal() {
-        const brownQty = parseInt(brownSelect.value, 10) || 0;
-        const whiteQty = parseInt(whiteSelect.value, 10) || 0;
-        const totalKg = brownQty + whiteQty;
-        const pricePerKg = 150;
-        const shipping = totalKg >= 10 ? 0 : 150;
-        const total = totalKg * pricePerKg + shipping;
-        totalAmount.textContent = total;
-        return total;
-      }
+        <!-- 客戶資訊區塊 -->
+        <div class="mb-5">
+            <label for="customerName" class="block text-gray-700 text-sm font-medium mb-2">您的姓名:</label>
+            <input type="text" id="customerName" placeholder="請輸入您的姓名" required
+                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-200 ease-in-out shadow-sm">
+        </div>
 
-      brownSelect.addEventListener('change', calculateTotal);
-      whiteSelect.addEventListener('change', calculateTotal);
+        <div class="mb-5">
+            <label for="phoneNumber" class="block text-gray-700 text-sm font-medium mb-2">手機號碼:</label>
+            <input type="tel" id="phoneNumber" placeholder="請輸入您的手機號碼" required
+                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-200 ease-in-out shadow-sm">
+        </div>
 
-      calculateTotal(); // 初始化金額
+        <div class="mb-5">
+            <label for="address" class="block text-gray-700 text-sm font-medium mb-2">地址:</label>
+            <input type="text" id="address" placeholder="請輸入您的地址" required
+                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition duration-200 ease-in-out shadow-sm">
+        </div>
 
-      // 表單送出事件
-      form.addEventListener('submit', function(event) {
-        event.preventDefault();
+        <!-- 米品數量選擇區塊 -->
+        <div id="riceQuantitiesContainer" class="mb-6 border p-4 rounded-lg bg-gray-50">
+            <h2 class="text-lg font-semibold text-gray-700 mb-3">訂購米品數量 (每包2公斤):</h2>
 
-        const data = {
-          name: form.name.value.trim(),
-          phone: form.phone.value.trim(),
-          email: form.email.value.trim(),
-          brownRice: Number(brownSelect.value),
-          whiteRice: Number(whiteSelect.value),
-          total: calculateTotal()
-        };
+            <!-- 白米數量 -->
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4 p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
+                <div class="flex-1">
+                    <label class="block text-gray-700 text-sm font-medium mb-1">白米包數 (1-20包):</label>
+                    <input type="number" id="quantityBaiMi" class="quantity-input w-full px-3 py-1.5 border border-gray-300 rounded-md focus:ring-blue-400 focus:border-blue-400 text-sm" min="0" max="20" value="0">
+                </div>
+            </div>
 
-        fetch("https://floral-sun-acc2.roger-c16.workers.dev", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(data)
-        }).then(response => {
-          if (!response.ok) throw new Error('伺服器回應錯誤');
-          return response.text();
-        }).then(() => {
-          alert("✅ 訂單已送出，謝謝您的訂購！");
-          form.reset();
-          calculateTotal();
-        }).catch(error => {
-          alert("❌ 送出失敗，請稍後再試。\n" + error.message);
+            <!-- 糙米數量 -->
+            <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4 p-3 border border-gray-200 rounded-lg bg-white shadow-sm">
+                <div class="flex-1">
+                    <label class="block text-gray-700 text-sm font-medium mb-1">糙米包數 (1-20包):</label>
+                    <input type="number" id="quantityCaiMi" class="quantity-input w-full px-3 py-1.5 border border-gray-300 rounded-md focus:ring-blue-400 focus:border-blue-400 text-sm" min="0" max="20" value="0">
+                </div>
+            </div>
+            <p class="text-sm text-gray-600 mt-2">提示：每包2公斤。若訂購總重量達到或超過 20 公斤，將自動免運費。</p>
+        </div>
+
+        <!-- 總重量顯示區塊 -->
+        <div id="totalWeightDisplay" class="text-lg font-semibold text-gray-700 text-center mb-4 p-2 bg-gray-50 rounded-lg border border-gray-200">
+            總重量: 0 公斤
+        </div>
+
+        <!-- 運費顯示區塊 -->
+        <div id="shippingCostDisplay" class="text-lg font-semibold text-gray-700 text-center mb-4 p-2 bg-gray-50 rounded-lg border border-gray-200">
+            運費: $0.00
+        </div>
+
+        <!-- 總金額顯示區塊 -->
+        <div id="totalPrice" class="text-3xl font-extrabold text-blue-700 text-center mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            總金額: $0.00
+        </div>
+
+        <!-- 提交訂單按鈕 -->
+        <button id="submitOrderBtn"
+                class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-4 focus:ring-blue-300 transition duration-300 ease-in-out transform active:scale-95 text-lg font-semibold shadow-md">
+            提交訂單
+        </button>
+
+        <!-- 訊息顯示區塊 -->
+        <div id="messageDisplay" class="mt-5 p-3 rounded-lg text-center font-medium hidden whitespace-pre-wrap"></div>
+    </div>
+
+    <script>
+        // --- Google Apps Script Web App URL ---
+        // 請將這裡替換為您部署 Google Apps Script 後獲得的 Web App URL
+        const GOOGLE_APPS_SCRIPT_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL";
+
+        // --- 商品資訊 ---
+        const PRICE_PER_BAG = 300; // 每包價格 300 元
+        const KG_PER_BAG = 2;      // 每包公斤數 2 公斤
+        const SHIPPING_COST_BASE = 150; // 基本運費 150 元
+        const FREE_SHIPPING_THRESHOLD_KG = 20; // 免運門檻：總重量達到或超過 20 公斤
+
+        // --- DOM 元素獲取 ---
+        const customerNameInput = document.getElementById('customerName');
+        const phoneNumberInput = document.getElementById('phoneNumber');
+        const addressInput = document.getElementById('address');
+        const quantityBaiMiInput = document.getElementById('quantityBaiMi'); // 白米數量輸入框
+        const quantityCaiMiInput = document.getElementById('quantityCaiMi'); // 糙米數量輸入框
+        const totalWeightDisplay = document.getElementById('totalWeightDisplay');
+        const shippingCostDisplay = document.getElementById('shippingCostDisplay');
+        const totalPriceDisplay = document.getElementById('totalPrice');
+        const submitOrderBtn = document.getElementById('submitOrderBtn');
+        const messageDisplay = document.getElementById('messageDisplay');
+
+        // --- 函式：強制數量限制 (確保輸入值在 min/max 範圍內) ---
+        function enforceQuantityLimits(event) {
+            let input = event.target;
+            let value = parseInt(input.value);
+            let min = parseInt(input.min);
+            let max = parseInt(input.max);
+
+            if (isNaN(value) || value < min) {
+                input.value = min;
+            } else if (value > max) {
+                input.value = max;
+            }
+            calculateOrderSummary(); // 重新計算以反映修正後的值
+        }
+
+        // --- 函式：計算訂單總結 (總金額、總重量、運費) ---
+        function calculateOrderSummary() {
+            let totalBags = 0;
+            const orderedItems = [];
+
+            // 處理白米數量
+            let quantityBaiMiBags = parseInt(quantityBaiMiInput.value);
+            if (isNaN(quantityBaiMiBags) || quantityBaiMiBags < 0) {
+                quantityBaiMiBags = 0;
+                quantityBaiMiInput.value = 0;
+            } else if (quantityBaiMiBags > 20) {
+                quantityBaiMiBags = 20;
+                quantityBaiMiInput.value = 20;
+            }
+            if (quantityBaiMiBags > 0) {
+                orderedItems.push({ rice_type: '白米', bags: quantityBaiMiBags, kg: quantityBaiMiBags * KG_PER_BAG });
+                totalBags += quantityBaiMiBags;
+            }
+
+            // 處理糙米數量
+            let quantityCaiMiBags = parseInt(quantityCaiMiInput.value);
+            if (isNaN(quantityCaiMiBags) || quantityCaiMiBags < 0) {
+                quantityCaiMiBags = 0;
+                quantityCaiMiInput.value = 0;
+            } else if (quantityCaiMiBags > 20) {
+                quantityCaiMiBags = 20;
+                quantityCaiMiInput.value = 20;
+            }
+            if (quantityCaiMiBags > 0) {
+                orderedItems.push({ rice_type: '糙米', bags: quantityCaiMiBags, kg: quantityCaiMiBags * KG_PER_BAG });
+                totalBags += quantityCaiMiBags;
+            }
+
+            const totalWeightKg = totalBags * KG_PER_BAG;
+            const subtotalPrice = totalBags * PRICE_PER_BAG;
+
+            let currentShippingCost = SHIPPING_COST_BASE;
+            if (totalWeightKg >= FREE_SHIPPING_THRESHOLD_KG) {
+                currentShippingCost = 0; // 達到免運門檻
+            }
+
+            const finalTotalPrice = subtotalPrice + currentShippingCost;
+
+            totalWeightDisplay.textContent = `總重量: ${totalWeightKg} 公斤`;
+            shippingCostDisplay.textContent = `運費: $${currentShippingCost.toFixed(2)}`;
+            totalPriceDisplay.textContent = `總金額: $${finalTotalPrice.toFixed(2)}`;
+
+            return { finalTotalPrice, currentShippingCost, orderedItems, totalWeightKg };
+        }
+
+        // --- 函式：顯示訊息 (成功/錯誤/載入中) ---
+        function showMessage(msg, type) {
+            messageDisplay.textContent = msg;
+            messageDisplay.classList.remove('hidden', 'bg-green-100', 'text-green-800', 'bg-red-100', 'text-red-800', 'bg-gray-100', 'text-gray-700');
+            if (type === 'success') {
+                messageDisplay.classList.add('bg-green-100', 'text-green-800');
+            } else if (type === 'error') {
+                messageDisplay.classList.add('bg-red-100', 'text-red-800');
+            } else if (type === 'loading') {
+                messageDisplay.classList.add('bg-gray-100', 'text-gray-700');
+            }
+            messageDisplay.style.display = 'block';
+        }
+
+        // --- 函式：呼叫 Gemini API 生成訂單摘要 ---
+        async function generateOrderSummaryWithLLM(customerName, orderedItems, shippingCost, totalPrice) {
+            showMessage('✨ 正在生成個性化訂單確認訊息...', 'loading');
+
+            const itemDetailsString = orderedItems.map(item => `${item.rice_type}: ${item.bags} 包 (${item.kg} 公斤)`).join(', ');
+
+            const prompt = `請為以下米團購訂單生成一個友善且個性化的訂單確認訊息。內容應包含客戶姓名、訂購明細、運費和總金額。請使用溫暖的語氣，並提及感謝訂購。不要包含任何 Markdown 格式（例如粗體、列表符號），只提供純文字。
+
+訂單詳情：
+姓名: ${customerName}
+訂購明細: ${itemDetailsString}
+運費: $${shippingCost.toFixed(2)}
+總金額: $${totalPrice.toFixed(2)}`;
+
+            let chatHistory = [];
+            chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+            const payload = { contents: chatHistory };
+            const apiKey = ""; // Canvas 將自動提供 API 金鑰
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const text = result.candidates[0].content.parts[0].text;
+                    showMessage(`✨ ${text}`, "success");
+                } else {
+                    console.error('Gemini API 返回了意外的結構或沒有內容:', result);
+                    showMessage("訂單提交成功，但無法生成個性化確認訊息。請稍後再試。", "error");
+                }
+            } catch (error) {
+                console.error('呼叫 Gemini API 失敗:', error);
+                showMessage("訂單提交成功，但生成個性化確認訊息時發生錯誤。請檢查網路連接。", "error");
+            }
+        }
+
+        // --- 函式：提交訂單到 Google Apps Script ---
+        async function submitOrder() {
+            const customerName = customerNameInput.value.trim();
+            const phoneNumber = phoneNumberInput.value.trim();
+            const address = addressInput.value.trim();
+
+            if (!customerName) {
+                showMessage("請輸入您的姓名。", "error");
+                return;
+            }
+            if (!phoneNumber) {
+                showMessage("請輸入您的手機號碼。", "error");
+                return;
+            }
+            if (!address) {
+                showMessage("請輸入您的地址。", "error");
+                return;
+            }
+
+            const { finalTotalPrice, currentShippingCost, orderedItems, totalWeightKg } = calculateOrderSummary();
+
+            // 檢查是否有訂購任何米品
+            if (orderedItems.length === 0) {
+                showMessage("請至少訂購一種米品。", "error");
+                return;
+            }
+
+            submitOrderBtn.disabled = true;
+            submitOrderBtn.textContent = '提交中...';
+            submitOrderBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+            const orderData = {
+                timestamp: new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }), // 台灣時間
+                customerName: customerName,
+                phoneNumber: phoneNumber,
+                address: address,
+                items: JSON.stringify(orderedItems), // 將訂購明細轉換為 JSON 字串
+                totalWeightKg: totalWeightKg,
+                shippingCost: currentShippingCost,
+                totalPrice: finalTotalPrice
+            };
+
+            try {
+                const response = await fetch(GOOGLE_APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // 必須使用 no-cors 模式，因為 Apps Script 預設不支援 CORS
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded', // Apps Script 期望這種格式
+                    },
+                    body: new URLSearchParams(orderData).toString() // 將資料轉換為 URL 編碼格式
+                });
+
+                // 注意：由於 'no-cors' 模式，response.ok 總是 true，且無法讀取 response.json()
+                // 我們假設請求成功發送，實際結果會在 Apps Script 端處理
+                console.log("訂單數據已發送到 Google Apps Script。");
+
+                // 呼叫 LLM 生成個性化訊息
+                await generateOrderSummaryWithLLM(customerName, orderedItems, currentShippingCost, finalTotalPrice);
+
+                // 清空表單並重設為預設狀態
+                customerNameInput.value = '';
+                phoneNumberInput.value = '';
+                addressInput.value = '';
+                quantityBaiMiInput.value = '0';
+                quantityCaiMiInput.value = '0';
+                calculateOrderSummary(); // 更新總金額顯示
+
+            } catch (err) {
+                console.error('提交訂單到 Google Apps Script 時發生錯誤:', err);
+                showMessage(`訂單提交失敗: ${err.message}。請檢查網路或 Apps Script 設定。`, "error");
+            } finally {
+                submitOrderBtn.disabled = false;
+                submitOrderBtn.textContent = '提交訂單';
+                submitOrderBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        // --- 頁面載入完成後執行 ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // 為數量輸入框綁定事件
+            quantityBaiMiInput.addEventListener('input', calculateOrderSummary);
+            quantityBaiMiInput.addEventListener('change', enforceQuantityLimits);
+            quantityCaiMiInput.addEventListener('input', calculateOrderSummary);
+            quantityCaiMiInput.addEventListener('change', enforceQuantityLimits);
+
+            // 初始計算一次總金額
+            calculateOrderSummary();
+
+            // 提交按鈕點擊事件
+            submitOrderBtn.addEventListener('click', submitOrder);
         });
-      });
-    });
-  </script>
+    </script>
 </body>
 </html>
