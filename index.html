@@ -2,34 +2,104 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8">
-  <title>團購米訂購表單</title>
+  <title>米訂購表單</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 600px; margin: auto; }
+    label { display: block; margin-top: 12px; }
+    input, select { width: 100%; padding: 8px; margin-top: 4px; }
+    .total { font-size: 1.2em; font-weight: bold; margin-top: 20px; }
+    button { margin-top: 20px; padding: 10px 20px; font-size: 1em; }
+  </style>
 </head>
 <body>
-  <h2>團購米訂購表單</h2>
-  {% if message %}<p style="color: green">{{ message }}</p>{% endif %}
-  <form method="post" action="/submit">
-    <label>姓名：<input type="text" name="name" required></label><br>
-    <label>米種：
-      <select name="type">
-        <option value="white">白米</option>
-        <option value="brown">糙米</option>
+  <h2>米訂購表單</h2>
+  <form id="orderForm">
+    <label>姓名：
+      <input type="text" name="name" required>
+    </label>
+    <label>聯絡電話：
+      <input type="text" name="phone" required>
+    </label>
+    <label>Email：
+      <input type="email" name="email" required>
+    </label>
+
+    <label>糙米（每公斤 $150）數量：
+      <select id="brownRice" name="brownRice">
+        <option value="0">0</option>
+        <script>
+          for (let i = 1; i <= 20; i++) {
+            document.write(`<option value="${i}">${i}</option>`);
+          }
+        </script>
       </select>
-    </label><br>
-    <label>數量(公斤)：
-      <select name="quantity" id="quantity">
-        {% for i in range(1, 21) %}<option value="{{ i }}">{{ i }}</option>{% endfor %}
+    </label>
+
+    <label>白米（每公斤 $150）數量：
+      <select id="whiteRice" name="whiteRice">
+        <option value="0">0</option>
+        <script>
+          for (let i = 1; i <= 20; i++) {
+            document.write(`<option value="${i}">${i}</option>`);
+          }
+        </script>
       </select>
-    </label><br>
-    <p>每公斤150元，總金額：<span id="total">150</span> 元</p>
-    <button type="submit">送出</button>
+    </label>
+
+    <p>※ 運費說明：每筆訂單預設運費 $150。若總數量達 10 公斤（可混搭白米與糙米）則免運。</p>
+
+    <div class="total">總金額：<span id="totalAmount">0</span> 元</div>
+
+    <button type="submit">送出訂單</button>
   </form>
+
   <script>
-    const quantity = document.getElementById("quantity");
-    const total = document.getElementById("total");
-    quantity.addEventListener("change", () => {
-      total.textContent = parseInt(quantity.value) * 150;
+    const brownSelect = document.getElementById('brownRice');
+    const whiteSelect = document.getElementById('whiteRice');
+    const totalAmount = document.getElementById('totalAmount');
+    const form = document.getElementById('orderForm');
+
+    function calculateTotal() {
+      const brownQty = parseInt(brownSelect.value) || 0;
+      const whiteQty = parseInt(whiteSelect.value) || 0;
+      const totalKg = brownQty + whiteQty;
+      const ricePrice = 150;
+      const shipping = totalKg >= 10 ? 0 : 150;
+      const total = (totalKg * ricePrice) + shipping;
+      totalAmount.textContent = total;
+      return total;
+    }
+
+    brownSelect.addEventListener("change", calculateTotal);
+    whiteSelect.addEventListener("change", calculateTotal);
+    calculateTotal();
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+
+      const data = {
+        name: form.name.value,
+        phone: form.phone.value,
+        email: form.email.value,
+        brownRice: brownSelect.value,
+        whiteRice: whiteSelect.value,
+        total: calculateTotal()
+      };
+
+      fetch("https://script.google.com/a/macros/sunday.tw/s/AKfycbx_l_Ep5vNXOLFQeCvEmWnQmxb197odQCqOyVRegs1ZqCoWuEotTRgbUqtd--Ngr3qb6A/exec", {
+        method: "POST",
+        body: JSON.stringify(data)
+      })
+        .then(res => res.text())
+        .then(response => {
+          alert("✅ 訂單已送出，謝謝您的訂購！");
+          form.reset();
+          calculateTotal();
+        })
+        .catch(error => {
+          alert("❌ 送出失敗，請稍後再試。\n" + error);
+        });
     });
   </script>
-  <p><a href="/admin">查看後台訂單管理</a></p>
 </body>
 </html>
